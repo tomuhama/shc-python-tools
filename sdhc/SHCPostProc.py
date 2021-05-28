@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from fcCalc import fcCalc
 
 __all__ = ["SHCPostProc"]
 
@@ -119,7 +120,6 @@ class SHCPostProc(object):
         return False
 
     def _calcFC(self, fileprefix, restartfile):
-        from fcCalc import fcCalc
         with fcCalc(fileprefix, restartfile) as fc:
             fc.preparelammps(
                 pair_style='sw', pair_coeff='* * Si_vbwm.sw Si', w_interface=3.0)

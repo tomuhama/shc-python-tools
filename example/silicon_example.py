@@ -1,18 +1,24 @@
-from __future__ import print_function
-
 import os
-
 import numpy as np
 from randomAtomBox import atombox
-from sdhc import SHCPostProc
+from SHCPostProc import SHCPostProc
 from lammps import lammps
+import pandas as pd
 
+#QUENCH_STEPS_HEATING = 5e3
 QUENCH_STEPS_HEATING = 5e5
+#QUENCH_STEPS_QUENCH = 1e3
 QUENCH_STEPS_QUENCH = 1e6
+#QUENCH_STEPS_COOLED = 5e3
 QUENCH_STEPS_COOLED = 5e5
 
+#SIMU_STEPS_EQUIL = 5e3
 SIMU_STEPS_EQUIL = 5e5
+
+#SIMU_STEPS_STEADY = 1e3
 SIMU_STEPS_STEADY = 1e6
+
+#SIMU_STEPS_SIMULATION = 1e3
 SIMU_STEPS_SIMULATION = 1e6
 
 SYSTEM_LENGTH = 200
@@ -37,7 +43,12 @@ def iterateFile(lmp, filename):
 def write_initial_positions_file(filename):
     mass = 28.0
     rho = 2.291  # Density in g/cm^3
-    n_atoms = np.int(np.round(rho * 1e-3 / 1e-6 * SYSTEM_LENGTH * SYSTEM_WIDTH ** 2 * 1e-30 / (mass * 1.66e-27)))
+
+    # 密度と計算系の大きさと一個当たりの原子質量から個数を見積もる
+    n_atoms = np.int(np.round(rho * 1e-3 / 1e-6 * SYSTEM_LENGTH *
+                              SYSTEM_WIDTH ** 2 * 1e-30 / (mass * 1.66e-27)))
+
+    # それに従って構造を作る
     ab = atombox(SYSTEM_LENGTH, SYSTEM_WIDTH, n_atoms)
     ab.fillBox(seed=1234)
     ab.writeToFile(filename, mass)
@@ -54,6 +65,8 @@ def perform_quench(folder, atom_positions_file, restart_file):
     lmp.command("variable steps_quench equal {}".format(QUENCH_STEPS_QUENCH))
     lmp.command("variable steps_cooled equal {}".format(QUENCH_STEPS_COOLED))
 
+    lmp.command("atom_modify map array")
+
     iterateFile(lmp, "quench_Si.lmp")
     lmp.close()
 
@@ -66,6 +79,8 @@ def perform_simulation(folder, restart_file):
     lmp.command("variable steps_equil equal {}".format(SIMU_STEPS_EQUIL))
     lmp.command("variable steps_steady equal {}".format(SIMU_STEPS_STEADY))
     lmp.command("variable steps_simu equal {}".format(SIMU_STEPS_SIMULATION))
+
+    lmp.command("atom_modify map array")
 
     iterateFile(lmp, "amorphous_interface.lmp")
     lmp.close()
@@ -107,13 +122,15 @@ def main(folder):
     :type folder: str
     :return: None
     """
-
+    # 結果入れるディレクトリ作る
     if not os.path.exists(folder):
         os.mkdir(folder)
 
+    # 原子position fileとは...？
     atom_positions_file = os.path.join(folder, 'Si.dat')
     restart_file = os.path.join(folder, 'quenched.restart')
 
+    # write initial position file
     write_initial_positions_file(atom_positions_file)
 
     # Do quenching
@@ -125,16 +142,15 @@ def main(folder):
     postprocessor = compute_sdhc(folder, restart_file)
 
     # Pickling the post-processing object into file
-    import cPickle as pickle
-    with open(os.path.join(folder, 'PP.pckl'), 'w') as f:
-        pickle.dump(postprocessor, f)
+    pd.to_pickle(postprocessor, os.path.join(folder, 'PP.pckl'))
 
-    # Saving into numpy files 
+    # Saving into numpy files
     np.save(os.path.join(folder, 'oms.npy'), postprocessor.oms_fft)
     np.save(os.path.join(folder, 'SHC.npy'), postprocessor.SHC_smooth)
 
     # Saving the frequencies and heat currents to file
-    np.savetxt(os.path.join(folder, 'SHC.txt'), np.column_stack((postprocessor.oms_fft, postprocessor.SHC_smooth)))
+    np.savetxt(os.path.join(folder, 'SHC.txt'), np.column_stack(
+        (postprocessor.oms_fft, postprocessor.SHC_smooth)))
 
 
 if __name__ == '__main__':
