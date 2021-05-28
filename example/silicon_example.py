@@ -1,24 +1,16 @@
 import os
 import numpy as np
 from randomAtomBox import atombox
-from SHCPostProc import SHCPostProc
+from adhc import SHCPostProc
 from lammps import lammps
 import pandas as pd
 
-#QUENCH_STEPS_HEATING = 5e3
 QUENCH_STEPS_HEATING = 5e5
-#QUENCH_STEPS_QUENCH = 1e3
 QUENCH_STEPS_QUENCH = 1e6
-#QUENCH_STEPS_COOLED = 5e3
 QUENCH_STEPS_COOLED = 5e5
 
-#SIMU_STEPS_EQUIL = 5e3
 SIMU_STEPS_EQUIL = 5e5
-
-#SIMU_STEPS_STEADY = 1e3
 SIMU_STEPS_STEADY = 1e6
-
-#SIMU_STEPS_SIMULATION = 1e3
 SIMU_STEPS_SIMULATION = 1e6
 
 SYSTEM_LENGTH = 200
@@ -44,11 +36,9 @@ def write_initial_positions_file(filename):
     mass = 28.0
     rho = 2.291  # Density in g/cm^3
 
-    # 密度と計算系の大きさと一個当たりの原子質量から個数を見積もる
     n_atoms = np.int(np.round(rho * 1e-3 / 1e-6 * SYSTEM_LENGTH *
                               SYSTEM_WIDTH ** 2 * 1e-30 / (mass * 1.66e-27)))
 
-    # それに従って構造を作る
     ab = atombox(SYSTEM_LENGTH, SYSTEM_WIDTH, n_atoms)
     ab.fillBox(seed=1234)
     ab.writeToFile(filename, mass)
@@ -122,15 +112,13 @@ def main(folder):
     :type folder: str
     :return: None
     """
-    # 結果入れるディレクトリ作る
+
     if not os.path.exists(folder):
         os.mkdir(folder)
 
-    # 原子position fileとは...？
     atom_positions_file = os.path.join(folder, 'Si.dat')
     restart_file = os.path.join(folder, 'quenched.restart')
 
-    # write initial position file
     write_initial_positions_file(atom_positions_file)
 
     # Do quenching
