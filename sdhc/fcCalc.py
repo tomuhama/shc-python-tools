@@ -1,4 +1,5 @@
 import numpy as np
+from lammps import lammps
 
 __all__ = ["fcCalc"]
 
@@ -15,6 +16,7 @@ class fcCalc:
     :param restartfile: LAMMPS restart file (TODO What is this)
     :type restartfile: str
     """
+
     def __init__(self, fileprefix, restartfile):
         self.fileprefix = fileprefix
         self.restartfile = restartfile
@@ -46,10 +48,11 @@ class fcCalc:
         :type w_interface: float, optional
         :return: None
         """
-        from lammps import lammps
+
         restartfile = self.restartfile
         self.lmp = lammps()
-        self.lmp.command("atom_modify map hash")
+
+        self.lmp.command("atom_modify map array")
         self.lmp.command('read_restart ' + restartfile + ' remap')
 
         if pair_style is not None:
@@ -59,9 +62,9 @@ class fcCalc:
 
         self.lmp.command("fix NVE all nve")
 
-        xlo = self.lmp.extract_global("boxxlo", 1)
-        xhi = self.lmp.extract_global("boxxhi", 1)
-        print "Box is [%f,%f]." % (xlo, xhi)
+        xlo = self.lmp.extract_global("boxxlo")
+        xhi = self.lmp.extract_global("boxxhi")
+        print("Box is [%f,%f]." % (xlo, xhi))
 
         # The position of the interface, at the middle by default (0.5)
         x_interface = (xlo + xhi) * x_interface
@@ -69,7 +72,8 @@ class fcCalc:
         xmax = x_interface + w_interface
         xmin = x_interface - w_interface
 
-        self.lmp.command("region middle block %f %f INF INF INF INF" % (xmin, xmax))
+        self.lmp.command(
+            "region middle block %f %f INF INF INF INF" % (xmin, xmax))
         self.lmp.command("group interface region middle")
 
         self.lmp.command("compute fxs interface property/atom fx")
@@ -77,11 +81,11 @@ class fcCalc:
         self.lmp.command("compute fzs interface property/atom fz")
 
         # Coordinates ordered by atom ID
-        coords_data = self.lmp.gather_atoms("x", 1, 3)
+        coords_data = self.lmp.gather_atoms(name="x", type=1, count=3)
 
         # Coordinates in a numpy array
         coords = np.array(coords_data[:], dtype=np.dtype('f8'))
-        self.natoms = self.lmp.extract_global("natoms", 0)
+        self.natoms = self.lmp.extract_global("natoms")
 
         coords = np.reshape(coords, (self.natoms, 3))
 
@@ -98,7 +102,8 @@ class fcCalc:
         self.inds_right = np.where(mask_right)[0]
 
         # All atom indices sorted by atom ID, duplicates removed
-        inds_interface = np.unique(np.concatenate((self.inds_left, self.inds_right)))
+        inds_interface = np.unique(np.concatenate(
+            (self.inds_left, self.inds_right)))
         # Where are the atoms of the left atom set
         self.ids_L = np.in1d(inds_interface, self.inds_left)
         self.ids_L = np.where(self.ids_L)[0]
@@ -119,13 +124,17 @@ class fcCalc:
         inds_left = self.inds_left
         inds_right = self.inds_right
         # One-dimensional indices of the atoms on the right side
-        inds_right_1d = np.concatenate((3 * inds_right, 3 * inds_right + 1, 3 * inds_right + 2))
+        inds_right_1d = np.concatenate(
+            (3 * inds_right, 3 * inds_right + 1, 3 * inds_right + 2))
         inds_right_1d = np.sort(inds_right_1d)
 
         Kij = np.zeros((len(inds_left) * 3, len(inds_right) * 3))
 
+        #self.lmp.command("atom_modify map hash")
+
         # Loop over the atoms on the left side
         for i1 in range(0, len(inds_left)):
+            # for i1 in range(0, 1):
             #        for i1 in range(0,10):
             # Index of the atom on the left
             ind1 = inds_left[i1]
@@ -133,38 +142,42 @@ class fcCalc:
             indx = 3 * ind1
             indy = 3 * ind1 + 1
             indz = 3 * ind1 + 2
-            print "\n Moving atom %i/%i. \n" % (i1 + 1, len(inds_left))
+            print("\n Moving atom %i/%i. \n" % (i1 + 1, len(inds_left)))
 
             # Move atom to directions x, y, and z
             for direction in [0, 1, 2]:
                 # Index of the displaced degree of freedom
                 index = 3 * ind1 + direction
                 # Get the coordinates from LAMMPS
-                xc = lmp.gather_atoms("x", 1, 3)
+                xc = lmp.gather_atoms(name="x", type=1, count=3)
                 # Move the atom
                 xc[index] += hstep
                 # Communicate to LAMMPS
-                lmp.scatter_atoms("x", 1, 3, xc)
+                lmp.scatter_atoms(name="x", type=1, count=3, data=xc)
                 # Run LAMMPS to update the forces
                 lmp.command("run 0 post no")
                 # Gather the forces
-                fc1 = lmp.gather_atoms("f", 1, 3)
-                # print "1=",fc1[0]
-                # print type(fc1)
+                fc1 = lmp.gather_atoms(name="f", type=1, count=3)
+                # print("1=",fc1[0])
+                # print(type(fc1))
                 fc1 = np.array(fc1, dtype=np.dtype('f8'))
-                # print "2=",fc1[0]
-                # print fc1[index]
+                # print("2=",fc1[0])
+                # print(fc1[index])
                 # Move to negative direction
                 xc[index] -= 2 * hstep
-                lmp.scatter_atoms("x", 1, 3, xc)
+
+                lmp.scatter_atoms(name="x", type=1, count=3, data=xc)
                 lmp.command("run 0 post no")
-                fc2 = lmp.gather_atoms("f", 1, 3)
+
+                fc2 = lmp.gather_atoms(name="f", type=1, count=3)
                 fc2 = np.array(fc2, dtype=np.dtype('f8'))
-                # print fc2[index]
+                # print(fc2[index])
                 # Fill one row of spring constant matrix
-                Kij[3 * i1 + direction, :] = (fc1[inds_right_1d] - fc2[inds_right_1d]) / (2.0 * hstep)
+                Kij[3 * i1 + direction,
+                    :] = (fc1[inds_right_1d] - fc2[inds_right_1d]) / (2.0 * hstep)
                 xc[index] += hstep
-                lmp.scatter_atoms("x", 1, 3, xc)
+
+                lmp.scatter_atoms(name="x", type=1, count=3, data=xc)
 
         self.Kij = Kij
 
@@ -188,11 +201,12 @@ if __name__ == "__main__":
     # args=parser.parse_args()
     # fileprefix=args.filePrefix
     # hstep=args.hstep
-    fileprefix = '270115a'
-    restartfile = fileprefix + '.quenched.restart'
+    fileprefix = 'quench.2000000'
+    restartfile = fileprefix + '.quench.restart'
     hstep = 0.001
 
     with fcCalc(fileprefix, restartfile) as fc:
-        fc.preparelammps(pair_style='sw', pair_coeff='* * Si_vbwm.sw Si', w_interface=3.0)
+        fc.preparelammps(
+            pair_style='sw', pair_coeff='* * Si_vbwm.sw Si', w_interface=3.0)
         fc.fcCalc(hstep)
         fc.writeToFile()
