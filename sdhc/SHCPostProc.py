@@ -1,4 +1,4 @@
-from __future__ import division, print_function
+import pandas as pd
 import numpy as np
 
 __all__ = ["SHCPostProc"]
@@ -87,23 +87,27 @@ class SHCPostProc(object):
             setattr(self, key, value)
 
         import os
-        if self.reCalcVels or not os.path.isfile(self.compactVelocityFile):  # Check if the velocity file exists
+        # Check if the velocity file exists
+        if self.reCalcVels or not os.path.isfile(self.compactVelocityFile):
             # Check that the LAMMPS Dump file exists
             if self.LAMMPSDumpFile is None or not os.path.isfile(self.LAMMPSDumpFile):
-                raise ValueError("You must give the LAMMPS velocity dump file as an argument to create the file " + self.compactVelocityFile + "!")
+                raise ValueError(
+                    "You must give the LAMMPS velocity dump file as an argument to create the file " + self.compactVelocityFile + "!")
             # print self.compactVelocityFile + " does not exist, creating by reading from file " + self.LAMMPSDumpFile
             # Run the C++ script
             self._compactVels(self.LAMMPSDumpFile, self.compactVelocityFile)
 
         else:
-            print(self.compactVelocityFile + " exists, using the file for post-processing.")
+            print(self.compactVelocityFile +
+                  " exists, using the file for post-processing.")
 
         # Check the force constant file
         if self.reCalcFC or not os.path.isfile(
                 self.KijFilePrefix + '.Kij.npy'):  # Check if the force constant file exists
             print("Creating file " + self.KijFilePrefix + ".")
             if self.LAMMPSRestartFile is None:
-                raise ValueError("You must give the LAMMPSRestartFile as an argument so that the file " + self.KijFilePrefix + ".Kij.npy can be created!")
+                raise ValueError("You must give the LAMMPSRestartFile as an argument so that the file " +
+                                 self.KijFilePrefix + ".Kij.npy can be created!")
             self._calcFC(self.KijFilePrefix, self.LAMMPSRestartFile)
         else:  # Load the force constants from file
             self._loadFC(self.KijFilePrefix)
@@ -117,11 +121,13 @@ class SHCPostProc(object):
     def _calcFC(self, fileprefix, restartfile):
         from fcCalc import fcCalc
         with fcCalc(fileprefix, restartfile) as fc:
-            fc.preparelammps(pair_style='sw', pair_coeff='* * Si_vbwm.sw Si', w_interface=3.0)
+            fc.preparelammps(
+                pair_style='sw', pair_coeff='* * Si_vbwm.sw Si', w_interface=3.0)
             fc.fcCalc(self.hstep)
             fc.writeToFile()
             self.Kij = fc.Kij  # Reference
-            print("Size of the Kij file is (3*%d)x(3*%d)." % (np.size(self.Kij, 0) / 3, np.size(self.Kij, 1) / 3))
+            print("Size of the Kij file is (3*%d)x(3*%d)." %
+                  (np.size(self.Kij, 0) / 3, np.size(self.Kij, 1) / 3))
             self.ids_L = fc.ids_L  # Reference
             self.ids_R = fc.ids_R  # Reference
             self.NL = len(self.ids_L)
@@ -132,10 +138,13 @@ class SHCPostProc(object):
     def _loadFC(self, KijFilePrefix):
         print("Loading the force constants from " + KijFilePrefix + '.Kij.npy')
         self.Kij = np.load(KijFilePrefix + '.Kij.npy')
-        print("Size of the Kij file is (3*%d)x(3*%d)." % (np.size(self.Kij, 0) / 3, np.size(self.Kij, 1) / 3))
-        print("Loading left interfacial atom indices from " + KijFilePrefix + '.ids_L.npy')
+        print("Size of the Kij file is (3*%d)x(3*%d)." %
+              (np.size(self.Kij, 0) / 3, np.size(self.Kij, 1) / 3))
+        print("Loading left interfacial atom indices from " +
+              KijFilePrefix + '.ids_L.npy')
         self.ids_L = np.load(KijFilePrefix + '.ids_L.npy')
-        print("Loading right interfacial atom indices from " + KijFilePrefix + '.ids_R.npy')
+        print("Loading right interfacial atom indices from " +
+              KijFilePrefix + '.ids_R.npy')
         self.ids_R = np.load(KijFilePrefix + '.ids_R.npy')
         self.NL = len(self.ids_L)
         print("len(ids_L)=%d" % self.NL)
@@ -152,9 +161,9 @@ class SHCPostProc(object):
 
     def _smoothen(self, df, func, widthWin):
         Nwindow = np.ceil(widthWin / df)
-        daniellWindow = np.ones(Nwindow) / Nwindow
+        daniellWindow = np.ones(int(Nwindow)) / Nwindow
         # daniellWindow/=np.sum(daniellWindow)
-        # Smooth the value           
+        # Smooth the value
         smooth = np.convolve(func, daniellWindow, 'same')
         return smooth
 
@@ -165,12 +174,14 @@ class SHCPostProc(object):
         :return: None
         """
 
-        print("Reading the compact velocity file " + self.compactVelocityFile + ".")
+        print("Reading the compact velocity file " +
+              self.compactVelocityFile + ".")
         f = open(self.compactVelocityFile, 'r')
         s = f.readline().split()
         NAtoms = int(s[1])
         if NAtoms != self.NL + self.NR:
-            raise ValueError('Mismatch in the numbers of atoms in the read velocity file and the used force constant file!')
+            raise ValueError(
+                'Mismatch in the numbers of atoms in the read velocity file and the used force constant file!')
 
         s = f.readline()
         print(s)
@@ -188,7 +199,8 @@ class SHCPostProc(object):
         # Total number of degrees of freedom
         NDOF = 3 * (self.NL + self.NR)
 
-        self.oms_fft = np.fft.rfftfreq(self.chunkSize, d=self.sampleTimestep) * 2 * np.pi
+        self.oms_fft = np.fft.rfftfreq(
+            self.chunkSize, d=self.sampleTimestep) * 2 * np.pi
         Nfreqs = np.size(self.oms_fft)
         # Initialize the spectral heat current arrays
         self.SHC_smooth = np.zeros(Nfreqs)
@@ -201,23 +213,26 @@ class SHCPostProc(object):
             #        for k in range(0,2): # Start the iteration over chunks
             print("Chunk %d/%d." % (k + 1, self.NChunks))
             # Read a chunk of velocitites
-            velArray = np.fromfile(f, dtype=np.dtype('f8'), count=self.chunkSize * NDOF, sep=" ")
+            velArray = np.fromfile(f, dtype=np.dtype(
+                'f8'), count=self.chunkSize * NDOF, sep=" ")
             # Prepare for exit if the read size does not match the chunk size
             if np.size(velArray) == 0:
                 print("Finished the file, exiting.")
                 self.NChunks = k - 1
                 break
             elif np.size(velArray) != self.chunkSize * NDOF:
-                # Reaching the end of file           
+                # Reaching the end of file
                 self.chunkSize = int(np.size(velArray) / NDOF)
                 if k > 0:  # Not the first chunk
                     self.NChunks = k - 1
                     break
                 else:
                     exitFlag = True
-                    self.oms_fft = np.fft.rfftfreq(self.chunkSize, d=self.sampleTimestep) * 2 * np.pi
+                    self.oms_fft = np.fft.rfftfreq(
+                        self.chunkSize, d=self.sampleTimestep) * 2 * np.pi
                     Nfreqs = np.size(self.oms_fft)
-                    print("Changing chunk size to " + str(int(np.size(velArray) / NDOF)) + "!")
+                    print("Changing chunk size to " +
+                          str(int(np.size(velArray) / NDOF)) + "!")
 
             # Reshape the array so that each row corresponds to different degree of freedom (e.g. particle 1, direction x etc.)
             velArray = np.reshape(velArray, (NDOF, self.chunkSize), order='F')
@@ -247,14 +262,14 @@ class SHCPostProc(object):
             # Normalize correctly
             SHC /= (self.chunkSize * self.sampleTimestep)
 
-            # Change units             
+            # Change units
             SHC *= self.scaleFactor
 
             # daniellWindow=np.ones(np.ceil(self.widthWin*2*np.pi/(self.oms_fft[1]-self.oms_fft[0])))
             # daniellWindow/=np.sum(daniellWindow)
 
             SHC_orig = SHC.copy()
-            # Smooth the value           
+            # Smooth the value
             # SHC=np.convolve(SHC,daniellWindow,'same')
             df = (self.oms_fft[1] - self.oms_fft[0]) / (2 * np.pi)
             SHC = self._smoothen(df, SHC, self.widthWin)
@@ -262,15 +277,17 @@ class SHCPostProc(object):
             if not exitFlag:  # If Nfreqs has changed, the running averaging cannot be performed
                 self.SHC_smooth = (k * self.SHC_smooth + SHC) / (k + 1.0)
                 # The square
-                self.SHC_smooth2 = (k * self.SHC_smooth2 + SHC ** 2) / (k + 1.0)
+                self.SHC_smooth2 = (
+                    k * self.SHC_smooth2 + SHC ** 2) / (k + 1.0)
                 # The non-smoothened average
-                self.SHC_average = (k * self.SHC_average + SHC_orig) / (k + 1.0)
+                self.SHC_average = (
+                    k * self.SHC_average + SHC_orig) / (k + 1.0)
                 if self.backupPrefix is not None:
-                    np.save(self.backupPrefix + '_backup_oms.npy', self.oms_fft)
-                    np.save(self.backupPrefix + '_backup_SHC.npy', self.SHC_smooth)
-                    import cPickle as pickle
-                    with open(self.backupPrefix + '_run_PP.pckl', 'w') as pf:
-                        pickle.dump(self, pf)
+                    np.save(self.backupPrefix +
+                            '_backup_oms.npy', self.oms_fft)
+                    np.save(self.backupPrefix +
+                            '_backup_SHC.npy', self.SHC_smooth)
+                    pd.to_pickle(self, self.backupPrefix + '_run_PP.pckl')
             elif exitFlag and k == 0:  # First chunk and new chunk size, needs re-initializing the vectors as Nfreqs may have changed
                 self.SHC_smooth = SHC
                 self.SHC_smooth2 = SHC ** 2
@@ -283,7 +300,8 @@ class SHCPostProc(object):
         # Calculate the error estimate at each frequency from the between-chunk variances
         if self.NChunks > 1:
             print("Calculating error estimates.")
-            samplevar = (self.NChunks / (self.NChunks - 1.0)) * (self.SHC_smooth2 - self.SHC_smooth ** 2)
+            samplevar = (self.NChunks / (self.NChunks - 1.0)) * \
+                (self.SHC_smooth2 - self.SHC_smooth ** 2)
             self.SHC_error = np.sqrt(samplevar) / np.sqrt(self.NChunks)
         else:
             self.SHC_error = None
