@@ -130,11 +130,8 @@ class fcCalc:
 
         Kij = np.zeros((len(inds_left) * 3, len(inds_right) * 3))
 
-        #self.lmp.command("atom_modify map hash")
-
         # Loop over the atoms on the left side
         for i1 in range(0, len(inds_left)):
-            # for i1 in range(0, 1):
             #        for i1 in range(0,10):
             # Index of the atom on the left
             ind1 = inds_left[i1]
