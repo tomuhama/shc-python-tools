@@ -1,7 +1,7 @@
 import os
 import numpy as np
 from randomAtomBox import atombox
-from adhc import SHCPostProc
+from sdhc import SHCPostProc
 from lammps import lammps
 import pandas as pd
 
